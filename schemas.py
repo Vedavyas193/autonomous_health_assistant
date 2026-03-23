@@ -55,6 +55,27 @@ class ComplexityOut(BaseModel):
     reasoning: str
 
 
+class TestRecommendationOut(BaseModel):
+    test_name: str
+    reason: str
+    urgency: str
+    test_type: str
+
+
+class DifferentialTestOut(BaseModel):
+    disease: str
+    probability: float
+    tests: list[dict]
+
+
+class TestingResultOut(BaseModel):
+    primary_disease: str
+    requires_testing: bool
+    tests: list[TestRecommendationOut]
+    differential_tests: list[DifferentialTestOut]
+    testing_rationale: str
+
+
 class DiagnoseResponse(BaseModel):
     patient_id: str
     primary_disease: str
@@ -64,6 +85,7 @@ class DiagnoseResponse(BaseModel):
     complexity: Optional[ComplexityOut] = None
     symptom_analysis: Optional[SymptomAnalysisOut] = None
     treatment_plan: Optional[TreatmentPlanOut] = None
+    testing: Optional[TestingResultOut] = None
     suggested_precautions: list[str]
     red_flags: list[str]
     top_k_diseases: list[DiseaseScore]
