@@ -280,6 +280,111 @@ export default function DiagnosisResult({ data }) {
           </div>
         </Card>
       )}
+      {/* Further Testing Required */}
+{data.testing?.requires_testing && (
+  <Card style={{ borderColor: 'var(--amber)' }}>
+    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '16px' }}>
+      <div style={{
+        width: '32px', height: '32px', borderRadius: '8px',
+        background: 'var(--amber-dim)', border: '1px solid var(--amber)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+      }}>
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+          <path d="M8 2v7M8 12v1" stroke="var(--amber)" strokeWidth="2" strokeLinecap="round"/>
+          <circle cx="8" cy="8" r="7" stroke="var(--amber)" strokeWidth="1.2" fill="none"/>
+        </svg>
+      </div>
+      <div>
+        <div style={{ fontFamily: 'var(--font-head)', fontWeight: 700, fontSize: '15px', color: 'var(--amber)' }}>
+          Further Testing Required
+        </div>
+        <div style={{ fontSize: '12px', color: 'var(--text2)', marginTop: '2px' }}>
+          {data.testing.testing_rationale}
+        </div>
+      </div>
+    </div>
+
+    <SectionTitle>Recommended diagnostic tests</SectionTitle>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '20px' }}>
+      {data.testing.tests.map((t, i) => {
+        const urgencyColor = {
+          IMMEDIATE:    'var(--red)',
+          WITHIN_24H:   'var(--amber)',
+          WITHIN_WEEK:  'var(--teal)',
+          ROUTINE:      'var(--text3)',
+        }[t.urgency] || 'var(--text3)'
+
+        const typeColors = {
+          BLOOD:   '#e85454', IMAGING: '#4a8fde', URINE:   '#f0a843',
+          STOOL:   '#8b6914', SWAB:    '#0fb8a0', ECG:     '#a855f7',
+          OTHER:   '#888780',
+        }
+
+        return (
+          <div key={i} style={{
+            display: 'flex', gap: '12px', alignItems: 'flex-start',
+            padding: '12px', background: 'var(--bg2)', borderRadius: '8px',
+            border: '1px solid var(--border)',
+          }}>
+            <div style={{
+              width: '28px', height: '28px', borderRadius: '6px', flexShrink: 0,
+              background: (typeColors[t.test_type] || '#888') + '22',
+              border: `1px solid ${typeColors[t.test_type] || '#888'}44`,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontSize: '10px', fontFamily: 'var(--font-mono)', fontWeight: 500,
+              color: typeColors[t.test_type] || '#888',
+            }}>
+              {t.test_type.slice(0, 2)}
+            </div>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: '13px', fontWeight: 500, color: 'var(--text)', marginBottom: '2px' }}>
+                {t.test_name}
+              </div>
+              <div style={{ fontSize: '12px', color: 'var(--text2)' }}>
+                {t.reason}
+              </div>
+            </div>
+            <span style={{
+              fontSize: '10px', fontFamily: 'var(--font-mono)', color: urgencyColor,
+              padding: '2px 8px', borderRadius: '10px',
+              background: urgencyColor + '18',
+              border: `1px solid ${urgencyColor}44`,
+              whiteSpace: 'nowrap', flexShrink: 0,
+            }}>
+              {t.urgency.replace('_', ' ')}
+            </span>
+          </div>
+        )
+      })}
+    </div>
+
+    {/* Differential tests */}
+    {data.testing.differential_tests?.length > 0 && (
+      <>
+        <SectionTitle>Also rule out — differential tests</SectionTitle>
+        {data.testing.differential_tests.map((d, i) => (
+          <div key={i} style={{
+            padding: '10px 12px', background: 'var(--bg2)', borderRadius: '8px',
+            border: '1px solid var(--border)', marginBottom: '8px',
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+              <span style={{ fontSize: '13px', fontWeight: 500, color: 'var(--text)' }}>{d.disease}</span>
+              <span style={{ fontSize: '11px', fontFamily: 'var(--font-mono)', color: 'var(--text3)' }}>
+                {(d.probability * 100).toFixed(1)}%
+              </span>
+            </div>
+            {d.tests.map((t, j) => (
+              <div key={j} style={{ fontSize: '12px', color: 'var(--text2)', padding: '3px 0', display: 'flex', gap: '6px' }}>
+                <span style={{ color: 'var(--teal)', flexShrink: 0 }}>▸</span>
+                {t.test_name} — <span style={{ color: 'var(--text3)' }}>{t.reason}</span>
+              </div>
+            ))}
+          </div>
+        ))}
+      </>
+    )}
+  </Card>
+)}
 
       {/* Referral */}
       {data.referral && (

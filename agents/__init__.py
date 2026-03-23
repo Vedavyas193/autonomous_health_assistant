@@ -6,3 +6,4 @@ from agents.collaborative_agents import (
     CollaborativeDiagnosticPipeline,
 )
 from agents.referral_agent import ReferralAgent
+from agents.testing_agent import TestingAgent
