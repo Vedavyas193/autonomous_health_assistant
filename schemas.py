@@ -5,12 +5,7 @@ from typing import Optional
 
 class SymptomPayload(BaseModel):
     patient_id: str = Field(..., description="Unique patient identifier")
-    symptoms: list[str] = Field(
-        ...,
-        min_items=1,
-        max_items=132,
-        description="List of symptom strings (natural language or canonical names)",
-    )
+    symptoms: list[str] = Field(..., min_items=1, max_items=132)
 
 
 class DiseaseScore(BaseModel):
@@ -19,6 +14,8 @@ class DiseaseScore(BaseModel):
     rank: int
     votes: int
     ensemble_winner: Optional[str] = None
+    dx_notes: Optional[str] = None
+    rag_confirmed: Optional[bool] = None
 
 
 class ModelBreakdown(BaseModel):
@@ -28,16 +25,50 @@ class ModelBreakdown(BaseModel):
     final_prediction: str
 
 
+class SymptomAnalysisOut(BaseModel):
+    dominant_system: str
+    total_severity_score: int
+    pattern_notes: str
+    systems_involved: Optional[list[str]] = None
+
+
+class TreatmentPlanOut(BaseModel):
+    immediate_actions: list[str]
+    precautions: list[str]
+    lifestyle_advice: list[str]
+    follow_up: str
+    refer_to_specialist: bool
+    specialist_type: str
+
+
+class ReferralOut(BaseModel):
+    specialist: str
+    urgency: str
+    referral_note: str
+    contact_advice: str
+
+
+class ComplexityOut(BaseModel):
+    level: str
+    score: int
+    systems_involved: list[str]
+    reasoning: str
+
+
 class DiagnoseResponse(BaseModel):
     patient_id: str
     primary_disease: str
     confidence_level: str
     model_agreement: int
     diagnosis_summary: str
+    complexity: ComplexityOut
+    symptom_analysis: Optional[SymptomAnalysisOut] = None
+    treatment_plan: Optional[TreatmentPlanOut] = None
     suggested_precautions: list[str]
     red_flags: list[str]
     top_k_diseases: list[DiseaseScore]
     model_breakdown: ModelBreakdown
+    referral: ReferralOut
     risk_level: str
     is_emergency: bool
     hmac_valid: bool
