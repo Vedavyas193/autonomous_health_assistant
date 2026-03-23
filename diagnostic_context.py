@@ -1,52 +1,47 @@
-"""Canonical diagnostic context serialization and HMAC-SHA256 integrity for the triage chain."""
-
 from __future__ import annotations
-
-import hashlib
-import hmac
-import json
-from typing import Any, Mapping
-
-JsonDict = dict[str, Any]
+from dataclasses import dataclass, field, asdict
+from typing import Optional
+import time
 
 
-def canonical_json_bytes(payload: Mapping[str, Any]) -> bytes:
-    return json.dumps(dict(payload), sort_keys=True, separators=(",", ":")).encode("utf-8")
+@dataclass
+class DiagnosticContext:
+    """
+    Canonical context object passed incrementally through the pipeline.
+    Each agent receives this, enriches it, and returns the updated version.
+    No agent mutates a prior agent's fields.
+    """
 
+    # ── Intake ────────────────────────────────────────────────────────────────
+    patient_id: str
+    raw_symptoms: list[str]
+    normalized_symptoms: list[str] = field(default_factory=list)
+    unknown_symptoms: list[str] = field(default_factory=list)
+    symptom_vector: list[float] = field(default_factory=list)
+    intake_ms: float = 0.0
 
-def context_sha256(payload: Mapping[str, Any]) -> str:
-    return hashlib.sha256(canonical_json_bytes(payload)).hexdigest()
+    # ── ML Classifier (ensemble) ──────────────────────────────────────────────
+    top_k_diseases: list[dict] = field(default_factory=list)
+    model_breakdown: dict = field(default_factory=dict)
+    classifier_ms: float = 0.0
 
+    # ── RAG Retrieval ─────────────────────────────────────────────────────────
+    retrieved_context: list[dict] = field(default_factory=list)
+    rag_ms: float = 0.0
 
-def sign_diagnostic_context(payload: Mapping[str, Any], secret_key: bytes) -> str:
-    msg = canonical_json_bytes(payload)
-    return hmac.new(secret_key, msg, hashlib.sha256).hexdigest()
+    # ── LLM Synthesis ─────────────────────────────────────────────────────────
+    diagnosis_summary: str = ""
+    confidence_level: str = ""
+    primary_disease: str = ""
+    model_agreement: int = 0
+    suggested_precautions: list[str] = field(default_factory=list)
+    red_flags: list[str] = field(default_factory=list)
+    llm_ms: float = 0.0
 
+    # ── Security & Audit ──────────────────────────────────────────────────────
+    hmac_signature: Optional[str] = None
+    pipeline_version: str = "2.0.0"
+    timestamp_utc: float = field(default_factory=time.time)
 
-def verify_diagnostic_context(
-    payload: Mapping[str, Any],
-    secret_key: bytes,
-    signature_hex: str,
-) -> bool:
-    expected = sign_diagnostic_context(payload, secret_key)
-    return hmac.compare_digest(expected, signature_hex)
-
-
-def build_audit_payload(
-    *,
-    intake: JsonDict,
-    ml_top_k: list[JsonDict],
-    rag: JsonDict,
-    explanation: JsonDict,
-    risk_level: str,
-    recommended_specialist: str,
-) -> JsonDict:
-    """Single object signed before SQLite write (Risk + Referral included after LLM)."""
-    return {
-        "intake": intake,
-        "ml": {"top_k": ml_top_k},
-        "rag": rag,
-        "explanation": explanation,
-        "risk_level": risk_level,
-        "recommended_specialist": recommended_specialist,
-    }
+    def to_dict(self) -> dict:
+        return asdict(self)

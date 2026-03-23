@@ -1,170 +1,174 @@
-import os
-import sys
+from __future__ import annotations
 
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-sys.path.insert(0, BASE_DIR)
-sys.path.append(os.path.join(BASE_DIR, "backend", "app"))
-sys.path.append(os.path.join(BASE_DIR, "backend", "app", "agents"))
+import asyncio
+import time
+import uuid
+from contextlib import asynccontextmanager
 
+import numpy as np
+import faiss
+import json
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-import uvicorn
+from sentence_transformers import SentenceTransformer
 
-from diagnostic_context import build_audit_payload, sign_diagnostic_context
-from ml_classifier import TriageMLClassifier
-from schemas import PatientRequest, TriageResponse, TopKDisease
+from diagnostic_engine import DiagnosticEngine, IntakeAgent
+from llm import ExplanationAgent
+from schemas import DiagnoseResponse, HealthResponse, SymptomPayload
+from security import DiagnosticContext, assess_risk, sign_context
 
-try:
-    from llm import ExplanationAgent
-    from risk_agent import RiskAssessmentAgent
-    from rag_agent import RAGRetrievalAgent
-    from referral_agent import ReferralAgent
-    from record_agent import RecordStorageAgent
-    from intake_agent import IntakeAgent
-except ImportError as e:
-    print(f"Import error: {e}")
-    sys.exit(1)
+# ── Globals (loaded once at startup) ─────────────────────────────────────────
+engine: DiagnosticEngine | None = None
+intake: IntakeAgent | None = None
+llm_agent: ExplanationAgent | None = None
+rag_encoder: SentenceTransformer | None = None
+rag_index: faiss.IndexFlatIP | None = None
+rag_corpus: list[dict] | None = None
 
-app = FastAPI(title="Autonomous Rural Health Triage API")
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    global engine, intake, llm_agent, rag_encoder, rag_index, rag_corpus
+
+    print("[STARTUP] Loading ensemble classifier...")
+    engine = DiagnosticEngine(model_dir="models/")
+    intake = IntakeAgent(symptom_cols=engine.symptom_cols)
+
+    print("[STARTUP] Loading RAG index...")
+    rag_encoder = SentenceTransformer("sentence-transformers/all-MiniLM-L6-v2")
+    rag_index = faiss.read_index("data/medical.faiss")
+    with open("data/medical_corpus.json") as f:
+        rag_corpus = json.load(f)
+
+    print("[STARTUP] Loading TinyLlama...")
+    llm_agent = ExplanationAgent(model_dir="models/")
+
+    print("[STARTUP] All components ready.")
+    yield
+
+
+app = FastAPI(
+    title="Autonomous Health Assistant API",
+    version="2.0.0",
+    lifespan=lifespan,
+)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["http://localhost:3000", "http://localhost:5173"],
+    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-HMAC_SECRET = os.environ.get("TRIAGE_HMAC_SECRET", "dev-hmac-secret-change-me").encode("utf-8")
 
-print("Booting hybrid AI architecture...")
+# ── RAG retrieval helper ──────────────────────────────────────────────────────
 
-try:
-    ml_engine = TriageMLClassifier(BASE_DIR)
-except Exception as e:
-    print(f"Warning: ML engine failed to load: {e}")
-    ml_engine = None
-
-rag_agent = RAGRetrievalAgent(base_dir=BASE_DIR)
-risk_agent = RiskAssessmentAgent(os.path.join(BASE_DIR, "Symptom-severity.csv"))
-referral_agent = ReferralAgent()
-intake_agent = IntakeAgent()
-storage_agent = RecordStorageAgent(
-    db_name=os.path.join(BASE_DIR, "patient_records.db"),
-    hmac_secret=HMAC_SECRET,
-)
-
-model_file_path = os.path.join(BASE_DIR, "models", "tinyllama-1.1b-chat-v1.0.Q4_K_M.gguf")
-llm_agent = ExplanationAgent(model_file_path)
-
-print("System ready.")
+def rag_retrieve(top_disease: str, symptoms: list[str], top_k: int = 3) -> list[dict]:
+    query = (
+        f"Disease: {top_disease}. "
+        f"Symptoms: {', '.join(symptoms[:10])}. "
+        "Precautions and recommended treatment."
+    )
+    embedding = rag_encoder.encode(
+        [query], convert_to_numpy=True, normalize_embeddings=True
+    ).astype(np.float32)
+    scores, indices = rag_index.search(embedding, top_k)
+    return [
+        {**rag_corpus[int(idx)], "score": float(round(scores[0][rank], 4))}
+        for rank, idx in enumerate(indices[0])
+        if idx != -1
+    ]
 
 
-def _explanation_for_audit(expl: dict) -> dict:
-    return {
-        "diagnosis_summary": expl.get("diagnosis_summary", ""),
-        "confidence_level": expl.get("confidence_level", "low"),
-        "suggested_precautions": expl.get("suggested_precautions", []),
-    }
+# ── Endpoints ─────────────────────────────────────────────────────────────────
+
+@app.get("/health", response_model=HealthResponse)
+async def health():
+    return HealthResponse(
+        status="ok",
+        models_loaded=all([engine, llm_agent, rag_index]),
+        pipeline_version="2.0.0",
+    )
 
 
-def _format_llm_text(expl: dict) -> str:
-    parts = [expl.get("diagnosis_summary", "")]
-    precs = expl.get("suggested_precautions") or []
-    if precs:
-        parts.append("Precautions: " + "; ".join(str(p) for p in precs))
-    return "\n\n".join(p for p in parts if p).strip()
+@app.post("/diagnose", response_model=DiagnoseResponse)
+async def diagnose(payload: SymptomPayload):
+    t_start = time.perf_counter()
 
-
-@app.post("/api/v1/triage", response_model=TriageResponse)
-def run_triage_pipeline(patient: PatientRequest):
-    if ml_engine is None:
-        raise HTTPException(status_code=503, detail="ML classifier not loaded")
-
-    try:
-        # Intake — normalize and clean symptom tokens
-        intake_ctx = intake_agent.process(patient.symptoms)
-        symptoms_list = intake_ctx["normalized_symptoms"]
-
-        # ML — Top-K
-        predicted_disease, confidence, top_k = ml_engine.predict_top_k(symptoms_list, k=5)
-        top_k_models = [
-            TopKDisease(disease=d, probability=p) for d, p in top_k
-        ]
-
-        # RAG — grounded snippets for primary prediction
-        rag_out = rag_agent.retrieve_for_disease(predicted_disease, top_k=3)
-        chunks = rag_out.get("chunks", [])
-
-        # Explanation LLM (structured JSON)
-        expl = llm_agent.generate_explanation(
-            disease=predicted_disease,
-            probability=confidence,
-            symptoms=symptoms_list,
-            top_k=top_k,
-            rag_chunks=chunks,
+    # 1. Intake normalization
+    t0 = time.perf_counter()
+    symptoms, unknown = intake.normalize(payload.symptoms)
+    if not symptoms:
+        raise HTTPException(
+            status_code=422,
+            detail=f"No recognizable symptoms found. Unknown: {unknown}",
         )
-        expl_audit = _explanation_for_audit(expl)
+    intake_ms = (time.perf_counter() - t0) * 1000
 
-        # Risk & referral (after ML + context; emergency overrides)
-        risk_level = risk_agent.calculate_risk(symptoms_list)
-        if patient.temperature_c is not None and patient.temperature_c > 39.5:
-            risk_level = "CRITICAL EMERGENCY"
-        specialist = referral_agent.get_specialist(predicted_disease, risk_level)
+    # 2. ML ensemble + RAG (run concurrently)
+    t0 = time.perf_counter()
+    vector = engine.build_symptom_vector(symptoms)
+    top_k = engine.predict_top_k(vector, top_k=5)
+    detail = engine.predict_single(vector)
+    classifier_ms = (time.perf_counter() - t0) * 1000
 
-        intake_block = {
-            "name": patient.name,
-            "age": patient.age,
-            "gender": patient.gender,
-            "normalized_symptoms": symptoms_list,
-            "temperature_c": patient.temperature_c,
-            "oxygen": patient.oxygen,
-            "heart_rate": patient.heart_rate,
-            "glucose": patient.glucose,
-        }
+    t0 = time.perf_counter()
+    rag_ctx = await asyncio.get_event_loop().run_in_executor(
+        None, rag_retrieve, top_k[0]["disease"], symptoms
+    )
+    rag_ms = (time.perf_counter() - t0) * 1000
 
-        audit_payload = build_audit_payload(
-            intake=intake_block,
-            ml_top_k=[{"disease": d, "probability": p} for d, p in top_k],
-            rag=rag_out,
-            explanation=expl_audit,
-            risk_level=risk_level,
-            recommended_specialist=specialist,
-        )
-        signature = sign_diagnostic_context(audit_payload, HMAC_SECRET)
+    # 3. LLM synthesis
+    t0 = time.perf_counter()
+    synthesis = await asyncio.get_event_loop().run_in_executor(
+        None, llm_agent.synthesize, symptoms, top_k, rag_ctx, detail
+    )
+    llm_ms = (time.perf_counter() - t0) * 1000
 
-        llm_text = _format_llm_text(expl)
+    # 4. Build context object, sign, assess risk, log
+    ctx = DiagnosticContext(
+        patient_id=payload.patient_id or str(uuid.uuid4()),
+        raw_symptoms=payload.symptoms,
+        normalized_symptoms=symptoms,
+        unknown_symptoms=unknown,
+        symptom_vector=vector.tolist(),
+        intake_ms=round(intake_ms, 1),
+        top_k_diseases=top_k,
+        model_breakdown=detail,
+        classifier_ms=round(classifier_ms, 1),
+        retrieved_context=rag_ctx,
+        rag_ms=round(rag_ms, 1),
+        diagnosis_summary=synthesis.get("diagnosis_summary", ""),
+        confidence_level=synthesis.get("confidence_level", "low"),
+        primary_disease=synthesis.get("primary_disease", top_k[0]["disease"]),
+        model_agreement=synthesis.get("model_agreement", top_k[0].get("votes", 0)),
+        suggested_precautions=synthesis.get("suggested_precautions", []),
+        red_flags=synthesis.get("red_flags", []),
+        llm_ms=round(llm_ms, 1),
+    )
 
-        saved = storage_agent.save_record(
-            symptoms=symptoms_list,
-            disease=predicted_disease,
-            confidence=confidence,
-            risk_level=risk_level,
-            specialist=specialist,
-            explanation_text=llm_text,
-            explanation_struct=expl,
-            audit_payload=audit_payload,
-            signature_hex=signature,
-        )
+    ctx = sign_context(ctx)
+    risk = assess_risk(ctx)  # verifies HMAC then writes to SQLite
 
-        return TriageResponse(
-            predicted_disease=predicted_disease,
-            probability=confidence,
-            risk_level=risk_level,
-            recommended_specialist=specialist,
-            llm_explanation=llm_text,
-            diagnosis_summary=expl_audit.get("diagnosis_summary", ""),
-            confidence_level=expl_audit.get("confidence_level", "low"),
-            suggested_precautions=list(expl_audit.get("suggested_precautions", [])),
-            top_k_predictions=top_k_models,
-            integrity_verified=bool(saved),
-        )
+    total_ms = round((time.perf_counter() - t_start) * 1000, 1)
+    print(f"[PIPELINE] {ctx.patient_id} complete in {total_ms}ms | "
+          f"Risk: {risk['risk_level']} | Disease: {ctx.primary_disease}")
 
-    except HTTPException:
-        raise
-    except Exception as e:
-        print(f"Pipeline error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-if __name__ == "__main__":
-    uvicorn.run("main:app", host="127.0.0.1", port=8000, reload=True)
+    return DiagnoseResponse(
+        patient_id=ctx.patient_id,
+        primary_disease=ctx.primary_disease,
+        confidence_level=ctx.confidence_level,
+        model_agreement=ctx.model_agreement,
+        diagnosis_summary=ctx.diagnosis_summary,
+        suggested_precautions=ctx.suggested_precautions,
+        red_flags=ctx.red_flags,
+        top_k_diseases=top_k,
+        model_breakdown=detail,
+        risk_level=risk["risk_level"],
+        is_emergency=risk["is_emergency"],
+        hmac_valid=risk["hmac_valid"],
+        unknown_symptoms=unknown,
+        pipeline_version=ctx.pipeline_version,
+        total_ms=total_ms,
+    )
