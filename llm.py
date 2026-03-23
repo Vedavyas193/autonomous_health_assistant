@@ -5,26 +5,26 @@ from pathlib import Path
 
 from llama_cpp import Llama
 
-SYSTEM_PROMPT = """You are a clinical triage assistant in an offline rural medical system.
+SYSTEM_PROMPT = """You are a clinical triage assistant. Respond with ONLY a JSON object.
 
-Synthesize a diagnostic report from the symptoms and classifier results provided.
-
-You MUST respond with ONLY a valid JSON object in exactly this format, no other text:
+Example of correct output:
 {
-  "diagnosis_summary": "2-3 sentence clinical summary here",
+  "diagnosis_summary": "The patient presents with symptoms consistent with Malaria including high fever, chills and sweating. The ensemble classifier shows strong agreement across all three models. Immediate antimalarial treatment should be sought.",
   "confidence_level": "high",
-  "primary_disease": "Disease Name Here",
+  "primary_disease": "Malaria",
   "model_agreement": 3,
-  "suggested_precautions": ["precaution 1", "precaution 2", "precaution 3"],
+  "suggested_precautions": ["Consult a doctor for antimalarial medication", "Rest and maintain hydration", "Use mosquito nets to prevent reinfection"],
   "red_flags": []
 }
 
 Rules:
-- confidence_level must be exactly "high", "medium", or "low"
-- model_agreement must be a number 1, 2, or 3
-- suggested_precautions must use only information from the retrieved context
-- red_flags lists emergency symptoms if present, otherwise empty list []
-- Output ONLY the JSON object. No markdown. No explanation. No preamble."""
+- diagnosis_summary: write 2-3 real sentences about the actual disease and symptoms given
+- confidence_level: ONLY write "high" if model_agreement is 3, "medium" if 2, "low" if 1
+- primary_disease: copy the top disease name exactly from the input
+- model_agreement: copy the agreement number from the input
+- suggested_precautions: 3-4 items based ONLY on the retrieved context provided
+- red_flags: list any of these if present in symptoms: chest_pain, breathlessness, unconsciousness, altered_sensorium — otherwise empty list []
+- Output ONLY the JSON. No explanation. No markdown. No extra text before or after."""
 
 
 def build_user_prompt(
@@ -168,7 +168,7 @@ class ExplanationAgent:
                     {"role": "system", "content": SYSTEM_PROMPT},
                     {"role": "user",   "content": user_prompt},
                 ],
-                max_tokens=600,
+                max_tokens=1024,
                 temperature=0.1,
                 top_p=0.9,
                 repeat_penalty=1.1,

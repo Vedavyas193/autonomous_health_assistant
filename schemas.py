@@ -5,7 +5,7 @@ from typing import Optional
 
 class SymptomPayload(BaseModel):
     patient_id: str = Field(..., description="Unique patient identifier")
-    symptoms: list[str] = Field(..., min_items=1, max_items=132)
+    symptoms: list[str] = Field(..., min_length=1, max_length=132)
 
 
 class DiseaseScore(BaseModel):
@@ -61,14 +61,14 @@ class DiagnoseResponse(BaseModel):
     confidence_level: str
     model_agreement: int
     diagnosis_summary: str
-    complexity: ComplexityOut
+    complexity: Optional[ComplexityOut] = None
     symptom_analysis: Optional[SymptomAnalysisOut] = None
     treatment_plan: Optional[TreatmentPlanOut] = None
     suggested_precautions: list[str]
     red_flags: list[str]
     top_k_diseases: list[DiseaseScore]
     model_breakdown: ModelBreakdown
-    referral: ReferralOut
+    referral: Optional[ReferralOut] = None
     risk_level: str
     is_emergency: bool
     hmac_valid: bool
