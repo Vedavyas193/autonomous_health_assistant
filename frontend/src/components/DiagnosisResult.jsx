@@ -1,454 +1,674 @@
 import { useState } from 'react'
 
-function Badge({ label, color = 'teal' }) {
-  const colors = {
-    teal:  { bg: 'var(--teal-glow)',  border: 'var(--teal)',     text: 'var(--teal)'  },
-    red:   { bg: 'var(--red-dim)',    border: 'var(--red)',      text: 'var(--red)'   },
-    amber: { bg: 'var(--amber-dim)',  border: 'var(--amber)',    text: 'var(--amber)' },
-    blue:  { bg: 'var(--blue-dim)',   border: 'var(--blue)',     text: 'var(--blue)'  },
-  }
-  const c = colors[color] || colors.teal
+const TABS = [
+  { id: 'overview',   label: 'Overview'   },
+  { id: 'testing',    label: 'Testing'    },
+  { id: 'treatment',  label: 'Treatment'  },
+  { id: 'referral',   label: 'Referral'   },
+  { id: 'details',    label: 'Details'    },
+]
+
+function Badge({ label, color = 'teal', size = 'sm' }) {
+  const c = {
+    teal:   { bg: 'rgba(0,212,170,0.12)',    border: 'rgba(0,212,170,0.3)',   text: 'var(--teal)'   },
+    red:    { bg: 'rgba(255,87,87,0.12)',    border: 'rgba(255,87,87,0.3)',   text: 'var(--red)'    },
+    amber:  { bg: 'rgba(255,179,64,0.12)',   border: 'rgba(255,179,64,0.3)', text: 'var(--amber)'  },
+    blue:   { bg: 'rgba(77,159,255,0.12)',   border: 'rgba(77,159,255,0.3)', text: 'var(--blue)'   },
+    purple: { bg: 'rgba(167,139,250,0.12)',  border: 'rgba(167,139,250,0.3)',text: 'var(--purple)' },
+    gray:   { bg: 'rgba(255,255,255,0.05)',  border: 'rgba(255,255,255,0.1)',text: 'var(--text2)'  },
+  }[color] || {}
   return (
     <span style={{
-      padding: '2px 10px', borderRadius: '20px', fontSize: '11px',
-      fontFamily: 'var(--font-mono)', fontWeight: 500,
+      padding: size === 'lg' ? '4px 14px' : '2px 10px',
+      borderRadius: '20px',
+      fontSize: size === 'lg' ? '12px' : '11px',
+      fontFamily: 'var(--mono)', fontWeight: 500,
       background: c.bg, border: `1px solid ${c.border}`, color: c.text,
+      letterSpacing: '0.04em',
     }}>
       {label}
     </span>
   )
 }
 
-function Card({ children, style = {} }) {
+function Card({ children, style = {}, delay = 0 }) {
   return (
     <div style={{
       background: 'var(--surface)', border: '1px solid var(--border)',
-      borderRadius: '12px', padding: '20px', ...style,
+      borderRadius: 'var(--radius-lg)', padding: '20px',
+      animation: `fadeUp 0.4s ease ${delay}s both`,
+      ...style,
     }}>
       {children}
     </div>
   )
 }
 
-function SectionTitle({ children }) {
+function SectionLabel({ children }) {
   return (
     <div style={{
-      fontSize: '11px', fontFamily: 'var(--font-mono)', color: 'var(--text3)',
-      letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: '12px',
+      fontSize: '10px', fontFamily: 'var(--mono)', color: 'var(--text3)',
+      letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: '14px',
+      display: 'flex', alignItems: 'center', gap: '8px',
     }}>
+      <div style={{ flex: 1, height: '1px', background: 'var(--border)' }}/>
       {children}
+      <div style={{ flex: 1, height: '1px', background: 'var(--border)' }}/>
     </div>
   )
 }
 
-export default function DiagnosisResult({ data }) {
-  const [showRaw, setShowRaw] = useState(false)
-
-  const complexityColor = {
-    LOW: 'teal', MEDIUM: 'amber', HIGH: 'red',
-  }[data.complexity?.level] || 'teal'
-
-  const riskColor = {
-    LOW: 'teal', MEDIUM: 'amber', HIGH: 'amber', EMERGENCY: 'red',
-  }[data.risk_level] || 'teal'
-
-  const confidenceColor = {
-    high: 'teal', medium: 'amber', low: 'red',
-  }[data.confidence_level] || 'teal'
+// ── Tab: Overview ─────────────────────────────────────────────────────────────
+function OverviewTab({ data }) {
+  const confidenceColor = { high: 'teal', medium: 'amber', low: 'red' }[data.confidence_level] || 'gray'
+  const riskColor       = { LOW: 'teal', MEDIUM: 'amber', HIGH: 'amber', EMERGENCY: 'red' }[data.risk_level] || 'gray'
+  const complexityColor = { LOW: 'teal', MEDIUM: 'amber', HIGH: 'red' }[data.complexity?.level] || 'gray'
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', animation: 'fadeUp 0.4s ease' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
 
-      {/* Emergency banner */}
-      {data.is_emergency && (
+      {/* Primary diagnosis hero */}
+      <Card delay={0} style={{
+        background: 'linear-gradient(135deg, var(--surface) 0%, var(--surface2) 100%)',
+        borderColor: data.is_emergency ? 'var(--red)' : 'var(--border)',
+        position: 'relative', overflow: 'hidden',
+      }}>
+        {/* background glow */}
         <div style={{
-          padding: '14px 20px', background: 'var(--red-dim)',
-          border: '1px solid var(--red)', borderRadius: '10px',
-          display: 'flex', alignItems: 'center', gap: '12px',
-        }}>
-          <div style={{
-            width: '10px', height: '10px', borderRadius: '50%',
-            background: 'var(--red)', animation: 'pulse-ring 1s ease-out infinite',
-            flexShrink: 0,
-          }}/>
-          <div>
-            <div style={{ fontFamily: 'var(--font-head)', fontWeight: 700, color: 'var(--red)', fontSize: '15px' }}>
-              EMERGENCY — Immediate Medical Attention Required
-            </div>
-            <div style={{ fontSize: '13px', color: 'var(--text2)', marginTop: '2px' }}>
-              {data.referral?.contact_advice}
-            </div>
-          </div>
-        </div>
-      )}
+          position: 'absolute', top: '-40px', right: '-40px',
+          width: '180px', height: '180px', borderRadius: '50%',
+          background: data.is_emergency
+            ? 'rgba(255,87,87,0.06)'
+            : 'rgba(0,212,170,0.06)',
+          filter: 'blur(40px)', pointerEvents: 'none',
+        }}/>
 
-      {/* Primary diagnosis */}
-      <Card>
-        <SectionTitle>Primary Diagnosis</SectionTitle>
-        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap' }}>
-          <div>
-            <div style={{ fontFamily: 'var(--font-head)', fontSize: '26px', fontWeight: 700, letterSpacing: '-0.02em', color: 'var(--teal)', marginBottom: '6px' }}>
-              {data.primary_disease}
-            </div>
-            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-              <Badge label={`${data.confidence_level?.toUpperCase()} CONFIDENCE`} color={confidenceColor}/>
-              <Badge label={`${data.model_agreement}/3 MODELS AGREE`} color={data.model_agreement === 3 ? 'teal' : 'amber'}/>
-              <Badge label={data.complexity?.level} color={complexityColor}/>
-              <Badge label={data.risk_level} color={riskColor}/>
-            </div>
-          </div>
-        </div>
-        {data.diagnosis_summary && (
+        {data.is_emergency && (
           <div style={{
-            marginTop: '16px', padding: '14px', background: 'var(--bg2)',
-            borderRadius: '8px', fontSize: '14px', color: 'var(--text2)', lineHeight: '1.7',
-            borderLeft: '3px solid var(--teal)',
+            display: 'flex', alignItems: 'center', gap: '8px',
+            padding: '8px 12px', background: 'var(--red-dim)',
+            border: '1px solid rgba(255,87,87,0.3)', borderRadius: '8px',
+            marginBottom: '16px',
           }}>
-            {data.diagnosis_summary}
+            <div style={{
+              width: '8px', height: '8px', borderRadius: '50%',
+              background: 'var(--red)', animation: 'pulse 1s ease-in-out infinite', flexShrink: 0,
+            }}/>
+            <span style={{ fontSize: '12px', color: 'var(--red)', fontWeight: 600 }}>
+              EMERGENCY — Seek immediate medical attention
+            </span>
           </div>
         )}
-      </Card>
 
-      {/* Model breakdown */}
-      <Card>
-        <SectionTitle>Ensemble model breakdown</SectionTitle>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: '10px' }}>
+        <div style={{ fontSize: '11px', fontFamily: 'var(--mono)', color: 'var(--text3)', marginBottom: '6px', letterSpacing: '0.08em' }}>
+          PRIMARY DIAGNOSIS
+        </div>
+        <div style={{
+          fontFamily: 'var(--font)', fontSize: '30px', fontWeight: 700,
+          letterSpacing: '-0.03em', color: data.is_emergency ? 'var(--red)' : 'var(--teal)',
+          marginBottom: '12px', lineHeight: 1.1,
+        }}>
+          {data.primary_disease}
+        </div>
+
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '18px' }}>
+          <Badge label={`${data.confidence_level?.toUpperCase()} CONFIDENCE`} color={confidenceColor} size="lg"/>
+          <Badge label={`${data.model_agreement}/3 MODELS`} color={data.model_agreement === 3 ? 'teal' : data.model_agreement === 2 ? 'amber' : 'red'} size="lg"/>
+          <Badge label={data.risk_level} color={riskColor} size="lg"/>
+          {data.complexity?.level && <Badge label={data.complexity.level} color={complexityColor} size="lg"/>}
+        </div>
+
+        {/* Rich summary */}
+        <div style={{
+          padding: '16px', background: 'var(--bg2)',
+          borderRadius: '10px', borderLeft: '3px solid var(--teal)',
+          fontSize: '14px', color: 'var(--text2)', lineHeight: '1.75',
+        }}>
+          {data.diagnosis_summary || 'Generating summary...'}
+        </div>
+
+        {/* Meta row */}
+        <div style={{
+          display: 'flex', gap: '20px', marginTop: '14px', flexWrap: 'wrap',
+        }}>
           {[
-            { label: 'SVM', value: data.model_breakdown?.svm_model_prediction },
-            { label: 'Naive Bayes', value: data.model_breakdown?.naive_bayes_prediction },
-            { label: 'Random Forest', value: data.model_breakdown?.rf_model_prediction },
-            { label: 'Ensemble vote', value: data.model_breakdown?.final_prediction, highlight: true },
-          ].map(m => (
-            <div key={m.label} style={{
-              padding: '12px', borderRadius: '8px',
-              background: m.highlight ? 'var(--teal-glow)' : 'var(--bg2)',
-              border: `1px solid ${m.highlight ? 'var(--teal-dim)' : 'var(--border)'}`,
-            }}>
-              <div style={{ fontSize: '10px', fontFamily: 'var(--font-mono)', color: 'var(--text3)', marginBottom: '4px', textTransform: 'uppercase' }}>
-                {m.label}
-              </div>
-              <div style={{ fontSize: '12px', fontWeight: 500, color: m.highlight ? 'var(--teal)' : 'var(--text)', lineHeight: 1.3 }}>
-                {m.value || '—'}
-              </div>
+            ['Latency', data.total_ms ? `${data.total_ms}ms` : '—'],
+            ['HMAC', data.hmac_valid ? 'Verified' : 'Failed'],
+            ['Pipeline', data.pipeline_version],
+            ['Patient', data.patient_id?.slice(0, 10)],
+          ].map(([k, v]) => (
+            <div key={k} style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+              <span style={{ fontSize: '10px', fontFamily: 'var(--mono)', color: 'var(--text3)', letterSpacing: '0.06em' }}>{k.toUpperCase()}</span>
+              <span style={{ fontSize: '12px', fontFamily: 'var(--mono)', color: k === 'HMAC' && !data.hmac_valid ? 'var(--red)' : 'var(--text2)' }}>{v}</span>
             </div>
           ))}
         </div>
       </Card>
 
-      {/* Top-K diseases */}
-      <Card>
-        <SectionTitle>Top disease probabilities</SectionTitle>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+      {/* Top-K disease probabilities */}
+      <Card delay={0.05}>
+        <SectionLabel>Disease probability distribution</SectionLabel>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
           {(data.top_k_diseases || []).map((d, i) => (
-            <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-              <span style={{ fontSize: '11px', fontFamily: 'var(--font-mono)', color: 'var(--text3)', width: '16px', textAlign: 'right' }}>
-                {d.rank}
-              </span>
-              <div style={{ flex: 1, position: 'relative', height: '28px', background: 'var(--bg2)', borderRadius: '4px', overflow: 'hidden' }}>
+            <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '12px', animation: `slideIn 0.3s ease ${i * 0.07}s both` }}>
+              <span style={{
+                fontSize: '11px', fontFamily: 'var(--mono)', color: 'var(--text3)',
+                width: '14px', textAlign: 'right', flexShrink: 0,
+              }}>{d.rank}</span>
+              <div style={{ flex: 1, position: 'relative', height: '32px', background: 'var(--bg2)', borderRadius: '6px', overflow: 'hidden' }}>
                 <div style={{
                   position: 'absolute', left: 0, top: 0, bottom: 0,
                   width: `${(d.probability * 100).toFixed(1)}%`,
-                  background: i === 0 ? 'var(--teal-glow)' : 'var(--surface2)',
+                  background: i === 0
+                    ? 'linear-gradient(90deg, rgba(0,212,170,0.2), rgba(0,212,170,0.08))'
+                    : 'rgba(255,255,255,0.03)',
                   borderRight: i === 0 ? '2px solid var(--teal)' : '1px solid var(--border2)',
-                  transition: 'width 0.8s ease',
+                  transition: 'width 1s ease',
+                  animation: `barFill 1s ease ${0.2 + i * 0.1}s both`,
+                  '--w': `${(d.probability * 100).toFixed(1)}%`,
                 }}/>
                 <span style={{
-                  position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)',
-                  fontSize: '12px', color: i === 0 ? 'var(--teal)' : 'var(--text2)', fontWeight: i === 0 ? 500 : 400,
+                  position: 'absolute', left: '12px', top: '50%',
+                  transform: 'translateY(-50%)', fontSize: '12px',
+                  color: i === 0 ? 'var(--teal)' : 'var(--text2)',
+                  fontWeight: i === 0 ? 500 : 400,
                 }}>
                   {d.disease}
                 </span>
               </div>
-              <span style={{ fontSize: '12px', fontFamily: 'var(--font-mono)', color: 'var(--text2)', width: '44px', textAlign: 'right' }}>
+              <span style={{
+                fontSize: '12px', fontFamily: 'var(--mono)', color: 'var(--text2)',
+                width: '44px', textAlign: 'right', flexShrink: 0,
+              }}>
                 {(d.probability * 100).toFixed(1)}%
               </span>
-              <span style={{ fontSize: '10px', fontFamily: 'var(--font-mono)', color: 'var(--text3)', width: '32px' }}>
-                {d.votes}/3
-              </span>
+              <div style={{ display: 'flex', gap: '3px', flexShrink: 0 }}>
+                {[0, 1, 2].map(j => (
+                  <div key={j} style={{
+                    width: '6px', height: '6px', borderRadius: '50%',
+                    background: j < (d.votes || 0) ? 'var(--teal)' : 'var(--border2)',
+                    transition: 'background 0.3s',
+                  }}/>
+                ))}
+              </div>
             </div>
           ))}
         </div>
       </Card>
 
-      {/* Complexity assessment */}
+      {/* Complexity */}
       {data.complexity && (
-        <Card>
-          <SectionTitle>Complexity assessment</SectionTitle>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '10px' }}>
-            <Badge label={data.complexity.level} color={complexityColor}/>
-            <span style={{ fontSize: '12px', fontFamily: 'var(--font-mono)', color: 'var(--text3)' }}>
-              Score: {data.complexity.score}/100
-            </span>
-          </div>
-          {data.complexity.systems_involved?.length > 0 && (
-            <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginBottom: '10px' }}>
-              {data.complexity.systems_involved.map(s => (
-                <Badge key={s} label={s} color="blue"/>
-              ))}
-            </div>
-          )}
-          <div style={{ fontSize: '13px', color: 'var(--text2)' }}>
-            {data.complexity.reasoning}
-          </div>
-        </Card>
-      )}
-
-      {/* Symptom analysis (collaborative agents output) */}
-      {data.symptom_analysis && (
-        <Card>
-          <SectionTitle>Symptom analysis</SectionTitle>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '12px' }}>
-            <div style={{ padding: '10px', background: 'var(--bg2)', borderRadius: '6px' }}>
-              <div style={{ fontSize: '10px', fontFamily: 'var(--font-mono)', color: 'var(--text3)', marginBottom: '4px' }}>DOMINANT SYSTEM</div>
-              <div style={{ fontSize: '14px', color: 'var(--teal)', fontWeight: 500, textTransform: 'capitalize' }}>
-                {data.symptom_analysis.dominant_system?.replace(/_/g, ' ')}
+        <Card delay={0.1}>
+          <SectionLabel>Case complexity</SectionLabel>
+          <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-start', flexWrap: 'wrap' }}>
+            <div style={{
+              padding: '12px 16px', background: 'var(--bg2)', borderRadius: '10px',
+              border: `1px solid ${
+                data.complexity.level === 'HIGH' ? 'rgba(255,87,87,0.3)' :
+                data.complexity.level === 'MEDIUM' ? 'rgba(255,179,64,0.3)' :
+                'rgba(0,212,170,0.3)'
+              }`, flexShrink: 0,
+            }}>
+              <div style={{ fontSize: '10px', fontFamily: 'var(--mono)', color: 'var(--text3)', marginBottom: '4px' }}>COMPLEXITY</div>
+              <div style={{
+                fontSize: '22px', fontWeight: 700,
+                color: data.complexity.level === 'HIGH' ? 'var(--red)' :
+                       data.complexity.level === 'MEDIUM' ? 'var(--amber)' : 'var(--teal)',
+              }}>{data.complexity.level}</div>
+              <div style={{ fontSize: '11px', fontFamily: 'var(--mono)', color: 'var(--text3)', marginTop: '2px' }}>
+                score {data.complexity.score}/100
               </div>
             </div>
-            <div style={{ padding: '10px', background: 'var(--bg2)', borderRadius: '6px' }}>
-              <div style={{ fontSize: '10px', fontFamily: 'var(--font-mono)', color: 'var(--text3)', marginBottom: '4px' }}>SEVERITY SCORE</div>
-              <div style={{ fontSize: '14px', color: 'var(--amber)', fontWeight: 500 }}>
-                {data.symptom_analysis.total_severity_score} pts
-              </div>
-            </div>
-          </div>
-          <div style={{ fontSize: '13px', color: 'var(--text2)' }}>
-            {data.symptom_analysis.pattern_notes}
-          </div>
-        </Card>
-      )}
-
-      {/* Treatment plan */}
-      {data.treatment_plan && (
-        <Card>
-          <SectionTitle>Treatment plan</SectionTitle>
-          {data.treatment_plan.immediate_actions?.length > 0 && (
-            <div style={{ marginBottom: '16px' }}>
-              <div style={{ fontSize: '12px', color: 'var(--red)', fontFamily: 'var(--font-mono)', marginBottom: '8px' }}>
-                IMMEDIATE ACTIONS
-              </div>
-              {data.treatment_plan.immediate_actions.map((a, i) => (
-                <div key={i} style={{ display: 'flex', gap: '10px', padding: '8px 0', borderBottom: '1px solid var(--border)' }}>
-                  <span style={{ color: 'var(--red)', fontFamily: 'var(--font-mono)', fontSize: '11px', flexShrink: 0, marginTop: '2px' }}>
-                    {String(i + 1).padStart(2, '0')}
-                  </span>
-                  <span style={{ fontSize: '13px', color: 'var(--text)' }}>{a}</span>
+            <div style={{ flex: 1 }}>
+              {data.complexity.systems_involved?.length > 0 && (
+                <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginBottom: '10px' }}>
+                  {data.complexity.systems_involved.map(s => (
+                    <Badge key={s} label={s} color="blue"/>
+                  ))}
                 </div>
-              ))}
-            </div>
-          )}
-          {data.treatment_plan.precautions?.length > 0 && (
-            <div style={{ marginBottom: '16px' }}>
-              <div style={{ fontSize: '12px', color: 'var(--teal)', fontFamily: 'var(--font-mono)', marginBottom: '8px' }}>
-                PRECAUTIONS
+              )}
+              <div style={{ fontSize: '13px', color: 'var(--text2)', lineHeight: 1.6 }}>
+                {data.complexity.reasoning}
               </div>
-              {data.treatment_plan.precautions.map((p, i) => (
-                <div key={i} style={{ display: 'flex', gap: '10px', padding: '8px 0', borderBottom: '1px solid var(--border)' }}>
-                  <span style={{ color: 'var(--teal)', fontSize: '11px', flexShrink: 0, marginTop: '3px' }}>▸</span>
-                  <span style={{ fontSize: '13px', color: 'var(--text2)' }}>{p}</span>
-                </div>
-              ))}
             </div>
-          )}
-          <div style={{ padding: '10px 12px', background: 'var(--bg2)', borderRadius: '6px', fontSize: '13px' }}>
-            <span style={{ color: 'var(--text3)', fontFamily: 'var(--font-mono)', fontSize: '10px' }}>FOLLOW-UP: </span>
-            <span style={{ color: 'var(--text)' }}>{data.treatment_plan.follow_up}</span>
           </div>
-        </Card>
-      )}
-
-      {/* Precautions (from LLM) */}
-      {data.suggested_precautions?.length > 0 && !data.treatment_plan && (
-        <Card>
-          <SectionTitle>Suggested precautions</SectionTitle>
-          {data.suggested_precautions.map((p, i) => (
-            <div key={i} style={{ display: 'flex', gap: '10px', padding: '8px 0', borderBottom: '1px solid var(--border)' }}>
-              <span style={{ color: 'var(--teal)', fontSize: '11px', flexShrink: 0, marginTop: '3px' }}>▸</span>
-              <span style={{ fontSize: '13px', color: 'var(--text2)' }}>{p}</span>
-            </div>
-          ))}
         </Card>
       )}
 
       {/* Red flags */}
       {data.red_flags?.length > 0 && (
-        <Card style={{ borderColor: 'var(--red)' }}>
-          <SectionTitle>Red flags detected</SectionTitle>
+        <Card delay={0.15} style={{ borderColor: 'rgba(255,87,87,0.4)' }}>
+          <SectionLabel>Red flags</SectionLabel>
           <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-            {data.red_flags.map((f, i) => (
-              <Badge key={i} label={f.replace(/_/g, ' ')} color="red"/>
-            ))}
+            {data.red_flags.map((f, i) => <Badge key={i} label={f.replace(/_/g,' ')} color="red"/>)}
           </div>
         </Card>
       )}
-      {/* Further Testing Required */}
-{data.testing?.requires_testing && (
-  <Card style={{ borderColor: 'var(--amber)' }}>
-    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '16px' }}>
-      <div style={{
-        width: '32px', height: '32px', borderRadius: '8px',
-        background: 'var(--amber-dim)', border: '1px solid var(--amber)',
-        display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
-      }}>
-        <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-          <path d="M8 2v7M8 12v1" stroke="var(--amber)" strokeWidth="2" strokeLinecap="round"/>
-          <circle cx="8" cy="8" r="7" stroke="var(--amber)" strokeWidth="1.2" fill="none"/>
-        </svg>
-      </div>
-      <div>
-        <div style={{ fontFamily: 'var(--font-head)', fontWeight: 700, fontSize: '15px', color: 'var(--amber)' }}>
-          Further Testing Required
-        </div>
-        <div style={{ fontSize: '12px', color: 'var(--text2)', marginTop: '2px' }}>
-          {data.testing.testing_rationale}
-        </div>
-      </div>
     </div>
+  )
+}
 
-    <SectionTitle>Recommended diagnostic tests</SectionTitle>
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '20px' }}>
-      {data.testing.tests.map((t, i) => {
-        const urgencyColor = {
-          IMMEDIATE:    'var(--red)',
-          WITHIN_24H:   'var(--amber)',
-          WITHIN_WEEK:  'var(--teal)',
-          ROUTINE:      'var(--text3)',
-        }[t.urgency] || 'var(--text3)'
-
-        const typeColors = {
-          BLOOD:   '#e85454', IMAGING: '#4a8fde', URINE:   '#f0a843',
-          STOOL:   '#8b6914', SWAB:    '#0fb8a0', ECG:     '#a855f7',
-          OTHER:   '#888780',
-        }
-
-        return (
-          <div key={i} style={{
-            display: 'flex', gap: '12px', alignItems: 'flex-start',
-            padding: '12px', background: 'var(--bg2)', borderRadius: '8px',
-            border: '1px solid var(--border)',
-          }}>
-            <div style={{
-              width: '28px', height: '28px', borderRadius: '6px', flexShrink: 0,
-              background: (typeColors[t.test_type] || '#888') + '22',
-              border: `1px solid ${typeColors[t.test_type] || '#888'}44`,
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              fontSize: '10px', fontFamily: 'var(--font-mono)', fontWeight: 500,
-              color: typeColors[t.test_type] || '#888',
-            }}>
-              {t.test_type.slice(0, 2)}
-            </div>
-            <div style={{ flex: 1 }}>
-              <div style={{ fontSize: '13px', fontWeight: 500, color: 'var(--text)', marginBottom: '2px' }}>
-                {t.test_name}
-              </div>
-              <div style={{ fontSize: '12px', color: 'var(--text2)' }}>
-                {t.reason}
-              </div>
-            </div>
-            <span style={{
-              fontSize: '10px', fontFamily: 'var(--font-mono)', color: urgencyColor,
-              padding: '2px 8px', borderRadius: '10px',
-              background: urgencyColor + '18',
-              border: `1px solid ${urgencyColor}44`,
-              whiteSpace: 'nowrap', flexShrink: 0,
-            }}>
-              {t.urgency.replace('_', ' ')}
-            </span>
+// ── Tab: Testing ──────────────────────────────────────────────────────────────
+function TestingTab({ data }) {
+  if (!data.testing?.requires_testing) {
+    return (
+      <Card delay={0}>
+        <div style={{ textAlign: 'center', padding: '32px', color: 'var(--text2)' }}>
+          <div style={{ fontSize: '32px', marginBottom: '12px' }}>✓</div>
+          <div style={{ fontSize: '15px', fontWeight: 500, color: 'var(--teal)', marginBottom: '6px' }}>
+            No further testing required
           </div>
-        )
-      })}
-    </div>
-
-    {/* Differential tests */}
-    {data.testing.differential_tests?.length > 0 && (
-      <>
-        <SectionTitle>Also rule out — differential tests</SectionTitle>
-        {data.testing.differential_tests.map((d, i) => (
-          <div key={i} style={{
-            padding: '10px 12px', background: 'var(--bg2)', borderRadius: '8px',
-            border: '1px solid var(--border)', marginBottom: '8px',
-          }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
-              <span style={{ fontSize: '13px', fontWeight: 500, color: 'var(--text)' }}>{d.disease}</span>
-              <span style={{ fontSize: '11px', fontFamily: 'var(--font-mono)', color: 'var(--text3)' }}>
-                {(d.probability * 100).toFixed(1)}%
-              </span>
-            </div>
-            {d.tests.map((t, j) => (
-              <div key={j} style={{ fontSize: '12px', color: 'var(--text2)', padding: '3px 0', display: 'flex', gap: '6px' }}>
-                <span style={{ color: 'var(--teal)', flexShrink: 0 }}>▸</span>
-                {t.test_name} — <span style={{ color: 'var(--text3)' }}>{t.reason}</span>
-              </div>
-            ))}
+          <div style={{ fontSize: '13px' }}>
+            The diagnostic ensemble has sufficient confidence for a clinical assessment.
           </div>
-        ))}
-      </>
-    )}
-  </Card>
-)}
+        </div>
+      </Card>
+    )
+  }
 
-      {/* Referral */}
-      {data.referral && (
-        <Card style={{ borderColor: data.referral.urgency === 'IMMEDIATE' ? 'var(--red)' : data.referral.urgency === 'URGENT' ? 'var(--amber)' : 'var(--border)' }}>
-          <SectionTitle>Referral</SectionTitle>
-          <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-start', flexWrap: 'wrap' }}>
-            <div style={{ flex: 1 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
-                <span style={{ fontFamily: 'var(--font-head)', fontSize: '16px', fontWeight: 600 }}>
-                  {data.referral.specialist}
+  const URGENCY_CONFIG = {
+    IMMEDIATE:   { color: 'var(--red)',   bg: 'rgba(255,87,87,0.1)',   label: 'Immediate'   },
+    WITHIN_24H:  { color: 'var(--amber)', bg: 'rgba(255,179,64,0.1)', label: 'Within 24h'  },
+    WITHIN_WEEK: { color: 'var(--teal)',  bg: 'rgba(0,212,170,0.1)',  label: 'Within week' },
+    ROUTINE:     { color: 'var(--text2)', bg: 'rgba(255,255,255,0.05)',label: 'Routine'     },
+  }
+
+  const TYPE_COLOR = {
+    BLOOD:'#ff5757', IMAGING:'#4d9fff', URINE:'#ffb340',
+    STOOL:'#a78bfa', SWAB:'#00d4aa',   ECG:'#f472b6', OTHER:'#7a8fa8',
+  }
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+      <Card delay={0} style={{ borderColor: 'rgba(255,179,64,0.3)' }}>
+        <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
+          <div style={{
+            width: '36px', height: '36px', borderRadius: '10px', flexShrink: 0,
+            background: 'var(--amber-dim)', border: '1px solid rgba(255,179,64,0.3)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }}>
+            <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+              <circle cx="9" cy="9" r="7.5" stroke="var(--amber)" strokeWidth="1.2"/>
+              <path d="M9 5v5M9 12.5v.5" stroke="var(--amber)" strokeWidth="1.8" strokeLinecap="round"/>
+            </svg>
+          </div>
+          <div>
+            <div style={{ fontWeight: 600, fontSize: '15px', color: 'var(--amber)', marginBottom: '4px' }}>
+              Further Testing Required
+            </div>
+            <div style={{ fontSize: '13px', color: 'var(--text2)', lineHeight: 1.6 }}>
+              {data.testing.testing_rationale}
+            </div>
+          </div>
+        </div>
+      </Card>
+
+      <Card delay={0.05}>
+        <SectionLabel>Recommended tests for {data.testing.primary_disease}</SectionLabel>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+          {data.testing.tests.map((t, i) => {
+            const urg = URGENCY_CONFIG[t.urgency] || URGENCY_CONFIG.ROUTINE
+            const tc  = TYPE_COLOR[t.test_type] || '#7a8fa8'
+            return (
+              <div key={i} style={{
+                display: 'flex', gap: '12px', alignItems: 'flex-start',
+                padding: '14px', background: 'var(--bg2)', borderRadius: '10px',
+                border: '1px solid var(--border)',
+                animation: `fadeUp 0.3s ease ${i * 0.05}s both`,
+                transition: 'border-color 0.2s',
+              }}
+              onMouseEnter={e => e.currentTarget.style.borderColor = 'var(--border2)'}
+              onMouseLeave={e => e.currentTarget.style.borderColor = 'var(--border)'}
+              >
+                <div style={{
+                  width: '36px', height: '36px', borderRadius: '8px', flexShrink: 0,
+                  background: tc + '18', border: `1px solid ${tc}33`,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  fontSize: '10px', fontFamily: 'var(--mono)', fontWeight: 600,
+                  color: tc,
+                }}>
+                  {t.test_type.slice(0,2)}
+                </div>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontWeight: 500, fontSize: '13px', color: 'var(--text)', marginBottom: '3px' }}>
+                    {t.test_name}
+                  </div>
+                  <div style={{ fontSize: '12px', color: 'var(--text2)', lineHeight: 1.5 }}>
+                    {t.reason}
+                  </div>
+                </div>
+                <span style={{
+                  padding: '3px 10px', borderRadius: '20px', fontSize: '10px',
+                  fontFamily: 'var(--mono)', fontWeight: 500, flexShrink: 0,
+                  background: urg.bg, color: urg.color,
+                  border: `1px solid ${urg.color}33`,
+                }}>
+                  {urg.label}
                 </span>
-                <Badge
-                  label={data.referral.urgency}
-                  color={data.referral.urgency === 'IMMEDIATE' ? 'red' : data.referral.urgency === 'URGENT' ? 'amber' : 'teal'}
-                />
               </div>
-              <div style={{ fontSize: '13px', color: 'var(--text2)', marginBottom: '6px' }}>
-                {data.referral.referral_note}
+            )
+          })}
+        </div>
+      </Card>
+
+      {data.testing.differential_tests?.length > 0 && (
+        <Card delay={0.1}>
+          <SectionLabel>Differential — also rule out</SectionLabel>
+          {data.testing.differential_tests.map((d, i) => (
+            <div key={i} style={{
+              padding: '12px', background: 'var(--bg2)', borderRadius: '10px',
+              border: '1px solid var(--border)', marginBottom: '8px',
+              animation: `fadeUp 0.3s ease ${0.1 + i * 0.05}s both`,
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px' }}>
+                <span style={{ fontWeight: 500, fontSize: '13px', color: 'var(--text)' }}>{d.disease}</span>
+                <span style={{ fontSize: '11px', fontFamily: 'var(--mono)', color: 'var(--text3)' }}>
+                  {(d.probability * 100).toFixed(1)}%
+                </span>
               </div>
-              <div style={{ fontSize: '12px', color: 'var(--teal)', fontFamily: 'var(--font-mono)' }}>
-                {data.referral.contact_advice}
-              </div>
+              {d.tests.map((t, j) => (
+                <div key={j} style={{
+                  display: 'flex', gap: '8px', padding: '6px 0',
+                  borderTop: j > 0 ? '1px solid var(--border)' : 'none',
+                  fontSize: '12px', color: 'var(--text2)',
+                }}>
+                  <span style={{ color: 'var(--teal)', flexShrink: 0 }}>▸</span>
+                  <span style={{ fontWeight: 500, color: 'var(--text)' }}>{t.test_name}</span>
+                  <span style={{ color: 'var(--text3)' }}>— {t.reason}</span>
+                </div>
+              ))}
             </div>
+          ))}
+        </Card>
+      )}
+    </div>
+  )
+}
+
+// ── Tab: Treatment ────────────────────────────────────────────────────────────
+function TreatmentTab({ data }) {
+  const plan = data.treatment_plan
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+      {/* Precautions from LLM */}
+      {data.suggested_precautions?.length > 0 && (
+        <Card delay={0}>
+          <SectionLabel>Suggested precautions</SectionLabel>
+          {data.suggested_precautions.map((p, i) => (
+            <div key={i} style={{
+              display: 'flex', gap: '12px', padding: '12px 0',
+              borderBottom: i < data.suggested_precautions.length - 1 ? '1px solid var(--border)' : 'none',
+              animation: `slideIn 0.3s ease ${i * 0.07}s both`,
+            }}>
+              <div style={{
+                width: '22px', height: '22px', borderRadius: '50%', flexShrink: 0,
+                background: 'var(--teal-glow)', border: '1px solid rgba(0,212,170,0.3)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                fontSize: '10px', fontFamily: 'var(--mono)', color: 'var(--teal)',
+                marginTop: '1px',
+              }}>
+                {i + 1}
+              </div>
+              <span style={{ fontSize: '13px', color: 'var(--text2)', lineHeight: 1.6 }}>{p}</span>
+            </div>
+          ))}
+        </Card>
+      )}
+
+      {plan ? (
+        <>
+          {plan.immediate_actions?.length > 0 && (
+            <Card delay={0.05} style={{ borderColor: 'rgba(255,87,87,0.3)' }}>
+              <SectionLabel>Immediate actions</SectionLabel>
+              {plan.immediate_actions.map((a, i) => (
+                <div key={i} style={{
+                  display: 'flex', gap: '12px', padding: '10px 0',
+                  borderBottom: i < plan.immediate_actions.length - 1 ? '1px solid var(--border)' : 'none',
+                  animation: `slideIn 0.3s ease ${i * 0.07}s both`,
+                }}>
+                  <span style={{
+                    fontFamily: 'var(--mono)', fontSize: '11px', color: 'var(--red)',
+                    flexShrink: 0, marginTop: '2px',
+                  }}>{String(i+1).padStart(2,'0')}</span>
+                  <span style={{ fontSize: '13px', color: 'var(--text)', lineHeight: 1.6 }}>{a}</span>
+                </div>
+              ))}
+            </Card>
+          )}
+
+          {plan.lifestyle_advice?.length > 0 && (
+            <Card delay={0.1}>
+              <SectionLabel>Lifestyle advice</SectionLabel>
+              {plan.lifestyle_advice.map((a, i) => (
+                <div key={i} style={{
+                  display: 'flex', gap: '10px', padding: '8px 0',
+                  borderBottom: i < plan.lifestyle_advice.length - 1 ? '1px solid var(--border)' : 'none',
+                  fontSize: '13px', color: 'var(--text2)',
+                  animation: `slideIn 0.3s ease ${i * 0.07}s both`,
+                }}>
+                  <span style={{ color: 'var(--teal)', flexShrink: 0 }}>→</span>
+                  {a}
+                </div>
+              ))}
+            </Card>
+          )}
+
+          <Card delay={0.15}>
+            <SectionLabel>Follow-up</SectionLabel>
+            <div style={{
+              padding: '14px', background: 'var(--bg2)', borderRadius: '8px',
+              fontSize: '14px', color: 'var(--text)',
+              borderLeft: '3px solid var(--teal)',
+            }}>
+              {plan.follow_up}
+            </div>
+          </Card>
+        </>
+      ) : (
+        !data.suggested_precautions?.length && (
+          <Card delay={0}>
+            <div style={{ textAlign: 'center', padding: '32px', color: 'var(--text3)', fontSize: '13px' }}>
+              Treatment plan not available for this case.
+            </div>
+          </Card>
+        )
+      )}
+    </div>
+  )
+}
+
+// ── Tab: Referral ─────────────────────────────────────────────────────────────
+function ReferralTab({ data }) {
+  const ref = data.referral
+  if (!ref) return (
+    <Card delay={0}>
+      <div style={{ textAlign: 'center', padding: '32px', color: 'var(--text3)', fontSize: '13px' }}>
+        No referral data available.
+      </div>
+    </Card>
+  )
+
+  const urgencyConfig = {
+    IMMEDIATE: { color: 'var(--red)',   bg: 'var(--red-dim)',   icon: '🚨' },
+    URGENT:    { color: 'var(--amber)', bg: 'var(--amber-dim)', icon: '⚠️' },
+    ROUTINE:   { color: 'var(--teal)',  bg: 'var(--teal-glow)', icon: '📋' },
+  }[ref.urgency] || { color: 'var(--teal)', bg: 'var(--teal-glow)', icon: '📋' }
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+      <Card delay={0} style={{ borderColor: urgencyConfig.color + '44' }}>
+        <div style={{
+          padding: '16px', background: urgencyConfig.bg,
+          borderRadius: '10px', marginBottom: '16px',
+          display: 'flex', alignItems: 'center', gap: '14px',
+        }}>
+          <div style={{ fontSize: '28px' }}>{urgencyConfig.icon}</div>
+          <div>
+            <div style={{ fontWeight: 700, fontSize: '18px', color: urgencyConfig.color, marginBottom: '2px' }}>
+              {ref.urgency}
+            </div>
+            <div style={{ fontSize: '12px', fontFamily: 'var(--mono)', color: 'var(--text2)' }}>
+              URGENCY LEVEL
+            </div>
+          </div>
+        </div>
+
+        <div style={{ marginBottom: '14px' }}>
+          <div style={{ fontSize: '11px', fontFamily: 'var(--mono)', color: 'var(--text3)', marginBottom: '6px', letterSpacing: '0.08em' }}>
+            REFER TO
+          </div>
+          <div style={{ fontSize: '20px', fontWeight: 600, color: 'var(--text)' }}>
+            {ref.specialist}
+          </div>
+        </div>
+
+        <div style={{
+          padding: '14px', background: 'var(--bg2)', borderRadius: '10px',
+          fontSize: '13px', color: 'var(--text2)', lineHeight: 1.7,
+          marginBottom: '12px',
+        }}>
+          {ref.referral_note}
+        </div>
+
+        <div style={{
+          padding: '12px 16px', background: 'var(--teal-glow)',
+          border: '1px solid rgba(0,212,170,0.2)', borderRadius: '8px',
+          fontSize: '13px', color: 'var(--teal)', fontWeight: 500,
+        }}>
+          {ref.contact_advice}
+        </div>
+      </Card>
+
+      {data.treatment_plan?.refer_to_specialist && (
+        <Card delay={0.05}>
+          <SectionLabel>Specialist type</SectionLabel>
+          <div style={{ fontSize: '16px', fontWeight: 600, color: 'var(--teal)' }}>
+            {data.treatment_plan.specialist_type}
+          </div>
+        </Card>
+      )}
+    </div>
+  )
+}
+
+// ── Tab: Details ──────────────────────────────────────────────────────────────
+function DetailsTab({ data }) {
+  const [showRaw, setShowRaw] = useState(false)
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+      {data.symptom_analysis && (
+        <Card delay={0}>
+          <SectionLabel>Symptom analysis</SectionLabel>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '14px' }}>
+            {[
+              ['Dominant system', data.symptom_analysis.dominant_system?.replace(/_/g,' ')],
+              ['Severity score',  `${data.symptom_analysis.total_severity_score} pts`],
+            ].map(([k, v]) => (
+              <div key={k} style={{ padding: '12px', background: 'var(--bg2)', borderRadius: '8px' }}>
+                <div style={{ fontSize: '10px', fontFamily: 'var(--mono)', color: 'var(--text3)', marginBottom: '4px', letterSpacing: '0.08em', textTransform: 'uppercase' }}>{k}</div>
+                <div style={{ fontSize: '14px', fontWeight: 500, color: 'var(--teal)', textTransform: 'capitalize' }}>{v}</div>
+              </div>
+            ))}
+          </div>
+          <div style={{ fontSize: '13px', color: 'var(--text2)', lineHeight: 1.6 }}>
+            {data.symptom_analysis.pattern_notes}
           </div>
         </Card>
       )}
 
-      {/* Pipeline meta */}
-      <div style={{
-        display: 'flex', gap: '16px', flexWrap: 'wrap',
-        padding: '12px 16px', background: 'var(--surface)',
-        border: '1px solid var(--border)', borderRadius: '8px',
-        fontSize: '11px', fontFamily: 'var(--font-mono)', color: 'var(--text3)',
-      }}>
-        {[
-          ['PATIENT', data.patient_id?.slice(0, 8)],
-          ['PIPELINE', data.pipeline_version],
-          ['HMAC', data.hmac_valid ? 'VERIFIED' : 'FAILED'],
-          ['LATENCY', data.total_ms ? `${data.total_ms}ms` : '—'],
-        ].map(([k, v]) => (
-          <span key={k}>{k}: <span style={{ color: k === 'HMAC' && !data.hmac_valid ? 'var(--red)' : 'var(--text2)' }}>{v}</span></span>
-        ))}
-      </div>
+      {data.unknown_symptoms?.length > 0 && (
+        <Card delay={0.05}>
+          <SectionLabel>Unrecognised symptoms</SectionLabel>
+          <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+            {data.unknown_symptoms.map((s, i) => <Badge key={i} label={s} color="gray"/>)}
+          </div>
+          <div style={{ fontSize: '12px', color: 'var(--text3)', marginTop: '10px' }}>
+            These symptoms were not found in the canonical symptom vocabulary and were excluded from analysis.
+          </div>
+        </Card>
+      )}
 
-      {/* Raw JSON toggle */}
       <button onClick={() => setShowRaw(v => !v)} style={{
-        padding: '8px 14px', background: 'transparent', border: '1px solid var(--border)',
-        borderRadius: '6px', color: 'var(--text3)', fontSize: '12px', fontFamily: 'var(--font-mono)',
+        padding: '10px 16px', background: 'transparent',
+        border: '1px solid var(--border)', borderRadius: '8px',
+        color: 'var(--text3)', fontSize: '12px', fontFamily: 'var(--mono)',
         alignSelf: 'flex-start', transition: 'all 0.15s',
       }}
-      onMouseEnter={e => e.currentTarget.style.borderColor = 'var(--border2)'}
-      onMouseLeave={e => e.currentTarget.style.borderColor = 'var(--border)'}
+      onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--border2)'; e.currentTarget.style.color = 'var(--text2)' }}
+      onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border)';  e.currentTarget.style.color = 'var(--text3)' }}
       >
-        {showRaw ? 'HIDE' : 'SHOW'} RAW JSON
+        {showRaw ? '▲ Hide' : '▼ Show'} raw JSON
       </button>
+
       {showRaw && (
         <pre style={{
           padding: '16px', background: 'var(--bg2)', border: '1px solid var(--border)',
-          borderRadius: '8px', fontSize: '11px', fontFamily: 'var(--font-mono)',
-          color: 'var(--text2)', overflowX: 'auto', lineHeight: 1.6,
+          borderRadius: '10px', fontSize: '11px', fontFamily: 'var(--mono)',
+          color: 'var(--text2)', overflowX: 'auto', lineHeight: 1.7,
+          animation: 'fadeIn 0.2s ease',
         }}>
           {JSON.stringify(data, null, 2)}
         </pre>
       )}
+    </div>
+  )
+}
+
+// ── Main export ───────────────────────────────────────────────────────────────
+export default function DiagnosisResult({ data }) {
+  const [activeTab, setActiveTab] = useState('overview')
+
+  const availableTabs = TABS.filter(t => {
+    if (t.id === 'testing'   && !data.testing?.requires_testing) return false
+    if (t.id === 'treatment' && !data.suggested_precautions?.length && !data.treatment_plan) return false
+    return true
+  })
+
+  return (
+    <div style={{ animation: 'fadeUp 0.4s ease' }}>
+      {/* Tab bar */}
+      <div style={{
+        display: 'flex', gap: '2px', marginBottom: '20px',
+        background: 'var(--surface)', borderRadius: '12px', padding: '4px',
+        border: '1px solid var(--border)',
+      }}>
+        {availableTabs.map(tab => {
+          const isActive = activeTab === tab.id
+          return (
+            <button key={tab.id} onClick={() => setActiveTab(tab.id)} style={{
+              flex: 1, padding: '8px 4px', borderRadius: '9px',
+              fontSize: '13px', fontWeight: isActive ? 600 : 400,
+              background: isActive ? 'var(--surface2)' : 'transparent',
+              color: isActive ? 'var(--teal)' : 'var(--text2)',
+              border: isActive ? '1px solid var(--border2)' : '1px solid transparent',
+              transition: 'all 0.2s',
+            }}
+            onMouseEnter={e => { if (!isActive) e.currentTarget.style.color = 'var(--text)' }}
+            onMouseLeave={e => { if (!isActive) e.currentTarget.style.color = 'var(--text2)' }}
+            >
+              {tab.label}
+              {tab.id === 'testing' && data.testing?.requires_testing && (
+                <span style={{
+                  display: 'inline-block', width: '6px', height: '6px',
+                  borderRadius: '50%', background: 'var(--amber)',
+                  marginLeft: '5px', verticalAlign: 'middle',
+                  animation: 'pulse 2s ease-in-out infinite',
+                }}/>
+              )}
+            </button>
+          )
+        })}
+      </div>
+
+      {/* Tab content */}
+      <div key={activeTab} style={{ animation: 'fadeUp 0.25s ease' }}>
+        {activeTab === 'overview'  && <OverviewTab  data={data}/>}
+        {activeTab === 'testing'   && <TestingTab   data={data}/>}
+        {activeTab === 'treatment' && <TreatmentTab data={data}/>}
+        {activeTab === 'referral'  && <ReferralTab  data={data}/>}
+        {activeTab === 'details'   && <DetailsTab   data={data}/>}
+      </div>
     </div>
   )
 }
