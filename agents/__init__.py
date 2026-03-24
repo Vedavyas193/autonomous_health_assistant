@@ -7,3 +7,4 @@ from agents.collaborative_agents import (
 )
 from agents.referral_agent import ReferralAgent
 from agents.testing_agent import TestingAgent
+from agents.nlp_agent import TextNormalizerAgent
