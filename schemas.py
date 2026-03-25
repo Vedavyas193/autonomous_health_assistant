@@ -5,7 +5,8 @@ from typing import Optional
 
 class SymptomPayload(BaseModel):
     patient_id: str = Field(..., description="Unique patient identifier")
-    symptoms: list[str] = Field(..., min_length=1, max_length=132)
+    symptoms: list[str] = Field(default=[], max_length=132)
+    free_text: Optional[str] = Field(None, description="Optional free text description")
 
 
 class DiseaseScore(BaseModel):
