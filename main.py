@@ -5,7 +5,6 @@ import json
 import time
 import uuid
 from contextlib import asynccontextmanager
-from dataclasses import asdict
 
 import faiss
 import numpy as np
@@ -68,7 +67,11 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title="Autonomous Health Assistant API", version="2.0.0", lifespan=lifespan)
+app = FastAPI(
+    title="Autonomous Health Assistant API",
+    version="2.0.0",
+    lifespan=lifespan,
+)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -109,23 +112,37 @@ async def diagnose(payload: SymptomPayload):
     t_start = time.perf_counter()
     loop    = asyncio.get_event_loop()
 
-    # ── 1. Intake ─────────────────────────────────────────────────────────────
-    symptoms, unknown = intake.normalize(payload.symptoms)
+    # ── 1. Intake — handle both symptom list and free text ───────────────────
+    all_inputs = list(payload.symptoms)
+    if payload.free_text and payload.free_text.strip():
+        all_inputs.append(payload.free_text.strip())
+
+    if not all_inputs:
+        raise HTTPException(
+            status_code=422,
+            detail="Please select at least one symptom or enter a description.",
+        )
+
+    symptoms, unknown = intake.normalize(all_inputs)
     if not symptoms:
         raise HTTPException(
             status_code=422,
-            detail=f"No recognizable symptoms. Unknown: {unknown}",
+            detail=(
+                f"No recognizable symptoms found. "
+                f"Try selecting from the list or use more specific terms. "
+                f"Unmatched: {all_inputs[:3]}"
+            ),
         )
 
     # ── 2. ML ensemble + RAG ──────────────────────────────────────────────────
-    vector = engine.build_symptom_vector(symptoms)
-    top_k  = engine.predict_top_k(vector, top_k=5)
-    detail = engine.predict_single(vector)
+    vector  = engine.build_symptom_vector(symptoms)
+    top_k   = engine.predict_top_k(vector, top_k=5)
+    detail  = engine.predict_single(vector)
     rag_ctx = await loop.run_in_executor(
         None, rag_retrieve, top_k[0]["disease"], symptoms
     )
 
-    # ── 3. Confidence (real — not from LLM) ──────────────────────────────────
+    # ── 3. Confidence ─────────────────────────────────────────────────────────
     votes      = top_k[0].get("votes", 0)
     top_prob   = top_k[0].get("probability", 0)
     n_symptoms = len(symptoms)
@@ -144,7 +161,7 @@ async def diagnose(payload: SymptomPayload):
         model_agreement=votes,
     )
 
-    # ── 5. Testing agent (uncertain cases) ────────────────────────────────────
+    # ── 5. Testing agent ──────────────────────────────────────────────────────
     testing_result = None
     if confidence in ("low", "medium") or votes < 3:
         testing_result = testing_agent.recommend(
@@ -153,7 +170,7 @@ async def diagnose(payload: SymptomPayload):
             symptoms=symptoms,
         )
 
-    # ── 6. Collaborative agents (LOW/MEDIUM complexity, high confidence) ──────
+    # ── 6. Collaborative agents ───────────────────────────────────────────────
     collab_result = None
     if (
         not complexity.has_emergency_symptoms
@@ -187,8 +204,10 @@ async def diagnose(payload: SymptomPayload):
     primary_disease = synthesis.get("primary_disease", top_k[0]["disease"])
     is_emergency    = (
         complexity.has_emergency_symptoms
-        or primary_disease in {"Heart attack", "Paralysis (brain hemorrhage)", "AIDS"}
-        and confidence == "high"
+        or (
+            primary_disease in {"Heart attack", "Paralysis (brain hemorrhage)", "AIDS"}
+            and confidence == "high"
+        )
     )
     referral = referral_agent.refer(primary_disease, is_emergency)
 
